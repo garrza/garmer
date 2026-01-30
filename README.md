@@ -1,6 +1,6 @@
 # Garmer - Garmin Data Extraction Tool
 
-A Python library for extracting health and fitness data from Garmin Connect, designed for integration with MoltBot and other health insight applications.
+A Python library for extracting health and fitness data from Garmin Connect, designed for integration with ClawdBot/MoltBot and other agentic applications with AgentSkills.
 
 ## Features
 

@@ -46,3 +46,6 @@ dmypy.json
 
 # Garmin tokens (sensitive)
 .garth/
+
+# OS files
+.DS_Store

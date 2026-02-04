@@ -69,9 +69,13 @@ class DailySummary(GarminBaseModel):
     total_kilocalories: int = Field(alias="totalKilocalories", default=0)
     active_kilocalories: int = Field(alias="activeKilocalories", default=0)
     bmr_kilocalories: int = Field(alias="bmrKilocalories", default=0)
-    consumed_kilocalories: int | None = Field(alias="consumedKilocalories", default=None)
+    consumed_kilocalories: int | None = Field(
+        alias="consumedKilocalories", default=None
+    )
     net_calorie_goal: int | None = Field(alias="netCalorieGoal", default=None)
-    remaining_kilocalories: int | None = Field(alias="remainingKilocalories", default=None)
+    remaining_kilocalories: int | None = Field(
+        alias="remainingKilocalories", default=None
+    )
 
     # Heart rate
     resting_heart_rate: int | None = Field(alias="restingHeartRate", default=None)
@@ -149,14 +153,24 @@ class DailySummary(GarminBaseModel):
     @classmethod
     def from_garmin_response(cls, data: dict[str, Any]) -> "DailySummary":
         """Parse daily summary from Garmin API response."""
+
+        # Helper to get value with None coalescing (handles explicit None from API)
+        def get_int(key: str, default: int = 0) -> int:
+            val = data.get(key)
+            return val if val is not None else default
+
+        def get_float(key: str, default: float | None = None) -> float | None:
+            val = data.get(key)
+            return val if val is not None else default
+
         return cls(
-            calendar_date=data.get("calendarDate", ""),
-            total_steps=data.get("totalSteps", 0),
-            daily_step_goal=data.get("dailyStepGoal", 10000),
-            total_distance_meters=data.get("totalDistanceMeters", 0),
-            total_kilocalories=data.get("totalKilocalories", 0),
-            active_kilocalories=data.get("activeKilocalories", 0),
-            bmr_kilocalories=data.get("bmrKilocalories", 0),
+            calendar_date=data.get("calendarDate") or "",
+            total_steps=get_int("totalSteps", 0),
+            daily_step_goal=get_int("dailyStepGoal", 10000),
+            total_distance_meters=get_int("totalDistanceMeters", 0),
+            total_kilocalories=get_int("totalKilocalories", 0),
+            active_kilocalories=get_int("activeKilocalories", 0),
+            bmr_kilocalories=get_int("bmrKilocalories", 0),
             consumed_kilocalories=data.get("consumedKilocalories"),
             net_calorie_goal=data.get("netCalorieGoal"),
             remaining_kilocalories=data.get("remainingKilocalories"),
@@ -166,31 +180,31 @@ class DailySummary(GarminBaseModel):
             avg_heart_rate=data.get("averageHeartRate"),
             avg_stress_level=data.get("averageStressLevel"),
             max_stress_level=data.get("maxStressLevel"),
-            stress_duration=data.get("stressDuration", 0),
-            rest_stress_duration=data.get("restStressDuration", 0),
+            stress_duration=get_int("stressDuration", 0),
+            rest_stress_duration=get_int("restStressDuration", 0),
             body_battery_charged_value=data.get("bodyBatteryChargedValue"),
             body_battery_drained_value=data.get("bodyBatteryDrainedValue"),
             body_battery_highest_value=data.get("bodyBatteryHighestValue"),
             body_battery_lowest_value=data.get("bodyBatteryLowestValue"),
             body_battery_most_recent_value=data.get("bodyBatteryMostRecentValue"),
-            floors_ascended=data.get("floorsAscended", 0),
-            floors_descended=data.get("floorsDescended", 0),
-            floors_ascended_goal=data.get("floorsAscendedGoal", 10),
-            moderate_intensity_minutes=data.get("moderateIntensityMinutes", 0),
-            vigorous_intensity_minutes=data.get("vigorousIntensityMinutes", 0),
-            intensity_minutes_goal=data.get("intensityMinutesGoal", 150),
-            highly_active_seconds=data.get("highlyActiveSeconds", 0),
-            active_seconds=data.get("activeSeconds", 0),
-            sedentary_seconds=data.get("sedentarySeconds", 0),
-            sleeping_seconds=data.get("sleepingSeconds", 0),
-            avg_waking_respiration_value=data.get("avgWakingRespirationValue"),
-            highest_respiration_value=data.get("highestRespirationValue"),
-            lowest_respiration_value=data.get("lowestRespirationValue"),
-            avg_spo2_value=data.get("averageSpO2"),
-            lowest_spo2_value=data.get("lowestSpO2"),
-            latest_spo2_value=data.get("latestSpO2"),
+            floors_ascended=get_int("floorsAscended", 0),
+            floors_descended=get_int("floorsDescended", 0),
+            floors_ascended_goal=get_int("floorsAscendedGoal", 10),
+            moderate_intensity_minutes=get_int("moderateIntensityMinutes", 0),
+            vigorous_intensity_minutes=get_int("vigorousIntensityMinutes", 0),
+            intensity_minutes_goal=get_int("intensityMinutesGoal", 150),
+            highly_active_seconds=get_int("highlyActiveSeconds", 0),
+            active_seconds=get_int("activeSeconds", 0),
+            sedentary_seconds=get_int("sedentarySeconds", 0),
+            sleeping_seconds=get_int("sleepingSeconds", 0),
+            avg_waking_respiration_value=get_float("avgWakingRespirationValue"),
+            highest_respiration_value=get_float("highestRespirationValue"),
+            lowest_respiration_value=get_float("lowestRespirationValue"),
+            avg_spo2_value=get_float("averageSpO2"),
+            lowest_spo2_value=get_float("lowestSpO2"),
+            latest_spo2_value=get_float("latestSpO2"),
             hrv_status=data.get("hrvStatus"),
-            activities_count=data.get("activitiesCount", 0),
+            activities_count=get_int("activitiesCount", 0),
             user_daily_summary_id=data.get("userDailySummaryId"),
             raw_data=data,
         )

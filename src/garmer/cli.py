@@ -122,7 +122,8 @@ def cmd_summary(args: argparse.Namespace) -> int:
         print("Not logged in. Use 'garmer login' first.", file=sys.stderr)
         return 1
 
-    target_date = args.date or date.today()
+    # Default to yesterday to avoid timezone issues and ensure complete data
+    target_date = args.date or (date.today() - timedelta(days=1))
     if isinstance(target_date, str):
         target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
@@ -163,7 +164,8 @@ def cmd_sleep(args: argparse.Namespace) -> int:
         print("Not logged in. Use 'garmer login' first.", file=sys.stderr)
         return 1
 
-    target_date = args.date or date.today()
+    # Default to yesterday to avoid timezone issues and ensure complete data
+    target_date = args.date or (date.today() - timedelta(days=1))
     if isinstance(target_date, str):
         target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
@@ -232,7 +234,8 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
         print("Not logged in. Use 'garmer login' first.", file=sys.stderr)
         return 1
 
-    target_date = args.date or date.today()
+    # Default to yesterday to avoid timezone issues and ensure complete data
+    target_date = args.date or (date.today() - timedelta(days=1))
     if isinstance(target_date, str):
         target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
@@ -423,11 +426,15 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Summary command
     summary_parser = subparsers.add_parser("summary", help="Show daily summary")
-    summary_parser.add_argument("-d", "--date", help="Date (YYYY-MM-DD)")
+    summary_parser.add_argument(
+        "-d", "--date", help="Date (YYYY-MM-DD), defaults to yesterday"
+    )
 
     # Sleep command
     sleep_parser = subparsers.add_parser("sleep", help="Show sleep data")
-    sleep_parser.add_argument("-d", "--date", help="Date (YYYY-MM-DD)")
+    sleep_parser.add_argument(
+        "-d", "--date", help="Date (YYYY-MM-DD), defaults to yesterday"
+    )
 
     # Activities command
     activities_parser = subparsers.add_parser(
@@ -439,7 +446,9 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Snapshot command
     snapshot_parser = subparsers.add_parser("snapshot", help="Get health snapshot")
-    snapshot_parser.add_argument("-d", "--date", help="Date (YYYY-MM-DD)")
+    snapshot_parser.add_argument(
+        "-d", "--date", help="Date (YYYY-MM-DD), defaults to yesterday"
+    )
     snapshot_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # Export command

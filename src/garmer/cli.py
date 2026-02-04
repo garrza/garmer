@@ -18,12 +18,43 @@ logger = logging.getLogger(__name__)
 
 def _get_package_root() -> Path | None:
     """Get the root directory of the garmer package (where .git lives)."""
-    # Start from this file's location and walk up to find .git
+    # First, try walking up from this file's location (works for editable installs)
     current = Path(__file__).resolve().parent
     for _ in range(5):  # Walk up at most 5 levels
         if (current / ".git").exists():
             return current
         current = current.parent
+
+    # Check common source locations
+    common_locations = [
+        Path.home() / ".openclaw" / "skills" / "garmer",
+        Path.home() / "Desktop" / "code" / "garmer",
+        Path.home() / "code" / "garmer",
+        Path.home() / "projects" / "garmer",
+    ]
+
+    for location in common_locations:
+        if (location / ".git").exists():
+            return location
+
+    # Try to find from pip's direct_url.json (for editable installs)
+    try:
+        import importlib.metadata
+
+        dist = importlib.metadata.distribution("garmer")
+        direct_url_file = dist._path.parent / "direct_url.json"  # type: ignore
+        if direct_url_file.exists():
+            import json
+
+            with open(direct_url_file) as f:
+                data = json.load(f)
+                if "url" in data and data["url"].startswith("file://"):
+                    source_path = Path(data["url"].replace("file://", ""))
+                    if (source_path / ".git").exists():
+                        return source_path
+    except Exception:
+        pass
+
     return None
 
 

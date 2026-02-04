@@ -128,32 +128,223 @@ def cmd_summary(args: argparse.Namespace) -> int:
         target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
 
     summary = client.get_daily_summary(target_date)
-    if summary:
-        print(f"\n=== Daily Summary for {target_date} ===\n")
-        print(f"Steps: {summary.total_steps:,} / {summary.daily_step_goal:,}")
-        print(f"Distance: {summary.total_distance_meters / 1000:.2f} km")
+
+    # Optionally fetch sleep data for a complete picture
+    sleep = None
+    if args.with_sleep:
+        sleep = client.get_sleep(target_date)
+
+    if not summary:
+        if args.json:
+            print(json.dumps({"date": str(target_date), "error": "No data available"}))
+        else:
+            print(f"No data available for {target_date}")
+        return 1
+
+    # JSON output for programmatic access (OpenClaw, scripts, etc.)
+    if args.json:
+        data = {
+            "date": str(target_date),
+            "steps": {
+                "total": summary.total_steps,
+                "goal": summary.daily_step_goal,
+                "goal_percentage": round(summary.step_goal_percentage, 1),
+                "goal_reached": summary.total_steps >= summary.daily_step_goal,
+            },
+            "distance_km": round(summary.total_distance_meters / 1000, 2),
+            "calories": {
+                "total": summary.total_kilocalories,
+                "active": summary.active_kilocalories,
+                "bmr": summary.bmr_kilocalories,
+            },
+            "floors": {
+                "ascended": summary.floors_ascended,
+                "descended": summary.floors_descended,
+                "goal": summary.floors_ascended_goal,
+            },
+            "heart_rate": {
+                "resting": summary.resting_heart_rate,
+                "min": summary.min_heart_rate,
+                "max": summary.max_heart_rate,
+                "avg": summary.avg_heart_rate,
+            },
+            "stress": {
+                "avg": summary.avg_stress_level,
+                "max": summary.max_stress_level,
+            },
+            "body_battery": {
+                "current": summary.body_battery_most_recent_value,
+                "high": summary.body_battery_highest_value,
+                "low": summary.body_battery_lowest_value,
+                "charged": summary.body_battery_charged_value,
+                "drained": summary.body_battery_drained_value,
+                "net_change": summary.body_battery_net_change,
+            },
+            "intensity_minutes": {
+                "moderate": summary.moderate_intensity_minutes,
+                "vigorous": summary.vigorous_intensity_minutes,
+                "total": summary.total_intensity_minutes,
+                "goal": summary.intensity_minutes_goal,
+            },
+            "respiration": {
+                "avg_waking": summary.avg_waking_respiration_value,
+                "highest": summary.highest_respiration_value,
+                "lowest": summary.lowest_respiration_value,
+            },
+            "spo2": {
+                "avg": summary.avg_spo2_value,
+                "lowest": summary.lowest_spo2_value,
+                "latest": summary.latest_spo2_value,
+            },
+            "hrv_status": summary.hrv_status,
+            "activity_time": {
+                "highly_active_hours": round(summary.highly_active_seconds / 3600, 2),
+                "active_hours": round(summary.active_seconds / 3600, 2),
+                "sedentary_hours": round(summary.sedentary_seconds / 3600, 2),
+            },
+            "activities_count": summary.activities_count,
+        }
+        if sleep:
+            data["sleep"] = {
+                "total_hours": round(sleep.total_sleep_hours, 2),
+                "deep_hours": round(sleep.deep_sleep_hours, 2),
+                "light_hours": round(sleep.light_sleep_hours, 2),
+                "rem_hours": round(sleep.rem_sleep_hours, 2),
+                "awake_hours": round(sleep.awake_hours, 2),
+                "score": sleep.overall_score,
+                "avg_hr": sleep.avg_sleep_heart_rate,
+                "avg_hrv": sleep.avg_hrv,
+            }
+        print(json.dumps(data, indent=2))
+        return 0
+
+    # Human-readable output
+    print(f"\n=== Daily Summary for {target_date} ===\n")
+
+    # Steps with goal percentage
+    step_pct = summary.step_goal_percentage
+    step_status = "achieved" if step_pct >= 100 else f"{step_pct:.0f}%"
+    print(
+        f"Steps: {summary.total_steps:,} / {summary.daily_step_goal:,} ({step_status})"
+    )
+    print(f"Distance: {summary.total_distance_meters / 1000:.2f} km")
+
+    # Calories
+    print(
+        f"Calories: {summary.total_kilocalories:,} (Active: {summary.active_kilocalories:,}, BMR: {summary.bmr_kilocalories:,})"
+    )
+
+    # Floors with goal
+    floors_pct = (
+        (summary.floors_ascended / summary.floors_ascended_goal * 100)
+        if summary.floors_ascended_goal > 0
+        else 0
+    )
+    print(
+        f"Floors: {summary.floors_ascended:.0f} / {summary.floors_ascended_goal} ({floors_pct:.0f}%)"
+    )
+
+    # Heart rate
+    hr_parts = []
+    if summary.resting_heart_rate:
+        hr_parts.append(f"Resting: {summary.resting_heart_rate}")
+    if summary.min_heart_rate and summary.max_heart_rate:
+        hr_parts.append(f"Range: {summary.min_heart_rate}-{summary.max_heart_rate}")
+    if summary.avg_heart_rate:
+        hr_parts.append(f"Avg: {summary.avg_heart_rate}")
+    if hr_parts:
+        print(f"Heart Rate: {', '.join(hr_parts)} bpm")
+
+    # Stress
+    if summary.avg_stress_level:
+        stress_label = _stress_level_label(summary.avg_stress_level)
+        print(f"Stress: {summary.avg_stress_level} avg ({stress_label})", end="")
+        if summary.max_stress_level:
+            print(f", {summary.max_stress_level} max")
+        else:
+            print()
+
+    # Body battery with details
+    if summary.body_battery_most_recent_value:
+        bb_parts = [f"Current: {summary.body_battery_most_recent_value}"]
+        if summary.body_battery_highest_value and summary.body_battery_lowest_value:
+            bb_parts.append(
+                f"Range: {summary.body_battery_lowest_value}-{summary.body_battery_highest_value}"
+            )
+        if summary.body_battery_net_change is not None:
+            sign = "+" if summary.body_battery_net_change >= 0 else ""
+            bb_parts.append(f"Net: {sign}{summary.body_battery_net_change}")
+        print(f"Body Battery: {', '.join(bb_parts)}")
+
+    # Intensity minutes with goal
+    total_intensity = summary.total_intensity_minutes
+    intensity_pct = (
+        (total_intensity / summary.intensity_minutes_goal * 100)
+        if summary.intensity_minutes_goal > 0
+        else 0
+    )
+    print(
+        f"Intensity: {summary.moderate_intensity_minutes} moderate + {summary.vigorous_intensity_minutes} vigorous "
+        f"= {total_intensity} total ({intensity_pct:.0f}% of {summary.intensity_minutes_goal} goal)"
+    )
+
+    # Respiration
+    if summary.avg_waking_respiration_value:
         print(
-            f"Calories: {summary.total_kilocalories:,} (Active: {summary.active_kilocalories:,})"
+            f"Respiration: {summary.avg_waking_respiration_value:.1f} breaths/min avg"
         )
-        print(f"Floors: {summary.floors_ascended:.0f}")
 
-        if summary.resting_heart_rate:
-            print(f"Resting HR: {summary.resting_heart_rate} bpm")
+    # SpO2
+    if summary.avg_spo2_value:
+        spo2_str = f"SpO2: {summary.avg_spo2_value:.0f}% avg"
+        if summary.lowest_spo2_value:
+            spo2_str += f", {summary.lowest_spo2_value:.0f}% lowest"
+        print(spo2_str)
 
-        if summary.avg_stress_level:
-            print(f"Avg Stress: {summary.avg_stress_level}")
+    # HRV status
+    if summary.hrv_status:
+        print(f"HRV Status: {summary.hrv_status}")
 
-        if summary.body_battery_most_recent_value:
-            print(f"Body Battery: {summary.body_battery_most_recent_value}")
-
+    # Activity time breakdown
+    if summary.highly_active_seconds > 0 or summary.active_seconds > 0:
+        active_mins = summary.highly_active_seconds // 60
+        light_active_mins = summary.active_seconds // 60
+        sedentary_hrs = summary.sedentary_seconds / 3600
         print(
-            f"\nIntensity Minutes: {summary.moderate_intensity_minutes} moderate + "
-            f"{summary.vigorous_intensity_minutes} vigorous"
+            f"Activity: {active_mins} min highly active, {light_active_mins} min active, "
+            f"{sedentary_hrs:.1f} hrs sedentary"
         )
-    else:
-        print(f"No data available for {target_date}")
+
+    # Activities count
+    if summary.activities_count > 0:
+        print(f"Recorded Activities: {summary.activities_count}")
+
+    # Sleep (if requested)
+    if sleep:
+        print(f"\n--- Last Night's Sleep ---")
+        print(f"Total: {sleep.total_sleep_hours:.1f} hrs")
+        print(
+            f"Stages: {sleep.deep_sleep_hours:.1f}h deep, {sleep.light_sleep_hours:.1f}h light, "
+            f"{sleep.rem_sleep_hours:.1f}h REM"
+        )
+        if sleep.overall_score:
+            print(f"Score: {sleep.overall_score}")
+        if sleep.avg_hrv:
+            print(f"Avg HRV: {sleep.avg_hrv:.0f} ms")
 
     return 0
+
+
+def _stress_level_label(level: int) -> str:
+    """Convert stress level to descriptive label."""
+    if level <= 25:
+        return "rest"
+    elif level <= 50:
+        return "low"
+    elif level <= 75:
+        return "medium"
+    else:
+        return "high"
 
 
 def cmd_sleep(args: argparse.Namespace) -> int:
@@ -428,6 +619,15 @@ def create_parser() -> argparse.ArgumentParser:
     summary_parser = subparsers.add_parser("summary", help="Show daily summary")
     summary_parser.add_argument(
         "-d", "--date", help="Date (YYYY-MM-DD), defaults to yesterday"
+    )
+    summary_parser.add_argument(
+        "--json", action="store_true", help="Output as JSON (for scripts/AI agents)"
+    )
+    summary_parser.add_argument(
+        "-s",
+        "--with-sleep",
+        action="store_true",
+        help="Include last night's sleep data",
     )
 
     # Sleep command

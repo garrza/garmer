@@ -34,14 +34,26 @@ class HydrationData(GarminBaseModel):
 
     @classmethod
     def from_garmin_response(cls, data: dict[str, Any]) -> "HydrationData":
-        """Parse hydration data from Garmin API response."""
+        """Parse hydration data from Garmin API response.
+
+        Handles both the daily endpoint format and the stats endpoint format.
+        """
+
+        # Helper to get value from either camelCase or snake_case key
+        def get_val(camel: str, snake: str, default: Any = None) -> Any:
+            return data.get(camel, data.get(snake, default))
+
         return cls(
-            calendar_date=data.get("calendarDate"),
-            total_intake_ml=data.get("valueInML", 0),
-            goal_ml=data.get("goalInML", 2500),
-            sweat_loss_ml=data.get("sweatLossInML", 0),
-            activity_intake_ml=data.get("activityIntakeInML", 0),
-            last_entry_timestamp=parse_garmin_timestamp(data.get("lastEntryTimestampGMT")),
+            calendar_date=get_val("calendarDate", "calendar_date"),
+            total_intake_ml=int(get_val("valueInML", "value_in_ml", 0)),
+            goal_ml=int(get_val("goalInML", "goal_in_ml", 2500)),
+            sweat_loss_ml=int(get_val("sweatLossInML", "sweat_loss_in_ml", 0)),
+            activity_intake_ml=int(
+                get_val("activityIntakeInML", "activity_intake_in_ml", 0)
+            ),
+            last_entry_timestamp=parse_garmin_timestamp(
+                get_val("lastEntryTimestampGMT", "last_entry_timestamp_gmt")
+            ),
             raw_data=data,
         )
 

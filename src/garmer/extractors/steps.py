@@ -30,7 +30,7 @@ class StepsExtractor(BaseExtractor[StepsData]):
         date_str = self._format_date(target_date)
         try:
             response = self._make_request(
-                f"/usersummary-service/usersummary/daily/{date_str}",
+                f"/usersummary-service/usersummary/daily/?calendarDate={date_str}",
             )
             if response:
                 return StepsData.from_garmin_response(response)

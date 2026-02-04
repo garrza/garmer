@@ -33,7 +33,8 @@ class SleepExtractor(BaseExtractor[SleepData]):
         date_str = self._format_date(target_date)
         try:
             response = self._make_request(
-                f"/wellness-service/wellness/dailySleepData/{date_str}",
+                f"/wellness-service/wellness/dailySleepData/{self.username}?"
+                f"nonSleepBufferMinutes=60&date={date_str}",
             )
             if response:
                 return SleepData.from_garmin_response(response)
@@ -55,30 +56,8 @@ class SleepExtractor(BaseExtractor[SleepData]):
         Returns:
             Detailed sleep data or None if not available
         """
-        date_str = self._format_date(target_date)
-        try:
-            # Get basic sleep data first
-            basic_response = self._make_request(
-                f"/wellness-service/wellness/dailySleepData/{date_str}",
-            )
-            if not basic_response:
-                return None
-
-            # Try to get detailed sleep levels
-            try:
-                levels_response = self._make_request(
-                    f"/wellness-service/wellness/dailySleepData/{date_str}",
-                    params={"nonSleepBufferMinutes": 60},
-                )
-                if levels_response:
-                    basic_response.update(levels_response)
-            except Exception:
-                pass  # Use basic data if detailed fetch fails
-
-            return SleepData.from_garmin_response(basic_response)
-        except Exception as e:
-            logger.error(f"Failed to get detailed sleep data for {date_str}: {e}")
-            return None
+        # The get_for_date method already fetches detailed data with buffer minutes
+        return self.get_for_date(target_date)
 
     def get_sleep_stats(
         self,

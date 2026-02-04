@@ -30,7 +30,7 @@ class HeartRateExtractor(BaseExtractor[HeartRateData]):
         date_str = self._format_date(target_date)
         try:
             response = self._make_request(
-                f"/wellness-service/wellness/dailyHeartRate/{date_str}",
+                f"/wellness-service/wellness/dailyHeartRate/?date={date_str}",
             )
             if response:
                 return HeartRateData.from_garmin_response(response)

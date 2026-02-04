@@ -29,11 +29,12 @@ class StressExtractor(BaseExtractor[StressData]):
         """
         date_str = self._format_date(target_date)
         try:
+            # Use the stats endpoint which is more reliable
             response = self._make_request(
-                f"/wellness-service/wellness/dailyStress/{date_str}",
+                f"/usersummary-service/stats/stress/daily/{date_str}/{date_str}",
             )
-            if response:
-                return StressData.from_garmin_response(response)
+            if response and isinstance(response, list) and len(response) > 0:
+                return StressData.from_garmin_response(response[0])
             return None
         except Exception as e:
             logger.error(f"Failed to get stress data for {date_str}: {e}")

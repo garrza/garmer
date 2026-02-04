@@ -145,11 +145,12 @@ class BodyExtractor(BaseExtractor[BodyComposition]):
         """
         date_str = self._format_date(target_date)
         try:
+            # Use the stats endpoint which is more reliable
             response = self._make_request(
-                f"/usersummary-service/usersummary/hydration/daily/{date_str}",
+                f"/usersummary-service/stats/hydration/daily/{date_str}/{date_str}",
             )
-            if response:
-                return HydrationData.from_garmin_response(response)
+            if response and isinstance(response, list) and len(response) > 0:
+                return HydrationData.from_garmin_response(response[0])
             return None
         except Exception as e:
             logger.error(f"Failed to get hydration data for {date_str}: {e}")
@@ -171,7 +172,7 @@ class BodyExtractor(BaseExtractor[BodyComposition]):
         date_str = self._format_date(target_date)
         try:
             response = self._make_request(
-                f"/wellness-service/wellness/dailyRespiration/{date_str}",
+                f"/wellness-service/wellness/dailyRespiration/?date={date_str}",
             )
             if response:
                 return RespirationData.from_garmin_response(response)

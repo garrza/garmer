@@ -29,10 +29,23 @@ class BaseExtractor(ABC, Generic[T]):
             auth: Authenticated GarminAuth instance
         """
         self.auth = auth
+        self._username: str | None = None
 
     def _ensure_authenticated(self) -> None:
         """Ensure we have valid authentication before making requests."""
         self.auth.ensure_authenticated()
+
+    @property
+    def username(self) -> str:
+        """
+        Get the authenticated user's username/display name.
+
+        Required for certain API endpoints that include username in the path.
+        """
+        if self._username is None:
+            self._ensure_authenticated()
+            self._username = garth.client.username
+        return self._username
 
     def _make_request(
         self,

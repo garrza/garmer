@@ -81,7 +81,10 @@ class StressData(GarminBaseModel):
 
     @classmethod
     def from_garmin_response(cls, data: dict[str, Any]) -> "StressData":
-        """Parse stress data from Garmin API response."""
+        """Parse stress data from Garmin API response.
+
+        Handles both the daily wellness endpoint format and the stats endpoint format.
+        """
         # Parse stress samples
         samples = []
         raw_samples = data.get("stressValuesArray", [])
@@ -97,21 +100,29 @@ class StressData(GarminBaseModel):
                 elif isinstance(sample, dict):
                     samples.append(StressSample.from_garmin_response(sample))
 
+        # Helper to get value from either camelCase or snake_case key
+        def get_val(camel: str, snake: str, default: Any = None) -> Any:
+            return data.get(camel, data.get(snake, default))
+
         return cls(
-            calendar_date=data.get("calendarDate"),
-            start_timestamp=parse_garmin_timestamp(data.get("startTimestampGMT")),
-            end_timestamp=parse_garmin_timestamp(data.get("endTimestampGMT")),
-            overall_stress_level=data.get("overallStressLevel"),
-            avg_stress_level=data.get("avgStressLevel"),
-            max_stress_level=data.get("maxStressLevel"),
-            rest_stress_duration=data.get("restStressDuration", 0),
-            low_stress_duration=data.get("lowStressDuration", 0),
-            medium_stress_duration=data.get("mediumStressDuration", 0),
-            high_stress_duration=data.get("highStressDuration", 0),
-            activity_stress_duration=data.get("activityStressDuration", 0),
-            uncategorized_stress_duration=data.get("uncategorizedStressDuration", 0),
-            body_battery_charged=data.get("bodyBatteryChargedValue"),
-            body_battery_drained=data.get("bodyBatteryDrainedValue"),
+            calendar_date=get_val("calendarDate", "calendar_date"),
+            start_timestamp=parse_garmin_timestamp(
+                get_val("startTimestampGMT", "start_timestamp_gmt")
+            ),
+            end_timestamp=parse_garmin_timestamp(
+                get_val("endTimestampGMT", "end_timestamp_gmt")
+            ),
+            overall_stress_level=get_val("overallStressLevel", "overall_stress_level"),
+            avg_stress_level=get_val("avgStressLevel", "avg_stress_level"),
+            max_stress_level=get_val("maxStressLevel", "max_stress_level"),
+            rest_stress_duration=get_val("restStressDuration", "rest_stress_duration", 0),
+            low_stress_duration=get_val("lowStressDuration", "low_stress_duration", 0),
+            medium_stress_duration=get_val("mediumStressDuration", "medium_stress_duration", 0),
+            high_stress_duration=get_val("highStressDuration", "high_stress_duration", 0),
+            activity_stress_duration=get_val("activityStressDuration", "activity_stress_duration", 0),
+            uncategorized_stress_duration=get_val("uncategorizedStressDuration", "uncategorized_stress_duration", 0),
+            body_battery_charged=get_val("bodyBatteryChargedValue", "body_battery_charged_value"),
+            body_battery_drained=get_val("bodyBatteryDrainedValue", "body_battery_drained_value"),
             stress_samples=samples,
             raw_data=data,
         )

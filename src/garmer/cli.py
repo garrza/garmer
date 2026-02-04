@@ -4,6 +4,7 @@ import argparse
 import getpass
 import json
 import logging
+import subprocess
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,17 @@ from garmer.client import GarminClient
 from garmer.config import load_config
 
 logger = logging.getLogger(__name__)
+
+
+def _get_package_root() -> Path | None:
+    """Get the root directory of the garmer package (where .git lives)."""
+    # Start from this file's location and walk up to find .git
+    current = Path(__file__).resolve().parent
+    for _ in range(5):  # Walk up at most 5 levels
+        if (current / ".git").exists():
+            return current
+        current = current.parent
+    return None
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -88,7 +100,9 @@ def cmd_summary(args: argparse.Namespace) -> int:
         print(f"\n=== Daily Summary for {target_date} ===\n")
         print(f"Steps: {summary.total_steps:,} / {summary.daily_step_goal:,}")
         print(f"Distance: {summary.total_distance_meters / 1000:.2f} km")
-        print(f"Calories: {summary.total_kilocalories:,} (Active: {summary.active_kilocalories:,})")
+        print(
+            f"Calories: {summary.total_kilocalories:,} (Active: {summary.active_kilocalories:,})"
+        )
         print(f"Floors: {summary.floors_ascended}")
 
         if summary.resting_heart_rate:
@@ -100,8 +114,10 @@ def cmd_summary(args: argparse.Namespace) -> int:
         if summary.body_battery_most_recent_value:
             print(f"Body Battery: {summary.body_battery_most_recent_value}")
 
-        print(f"\nIntensity Minutes: {summary.moderate_intensity_minutes} moderate + "
-              f"{summary.vigorous_intensity_minutes} vigorous")
+        print(
+            f"\nIntensity Minutes: {summary.moderate_intensity_minutes} moderate + "
+            f"{summary.vigorous_intensity_minutes} vigorous"
+        )
     else:
         print(f"No data available for {target_date}")
 
@@ -124,9 +140,13 @@ def cmd_sleep(args: argparse.Namespace) -> int:
     if sleep:
         print(f"\n=== Sleep Data for night ending {target_date} ===\n")
         print(f"Total Sleep: {sleep.total_sleep_hours:.1f} hours")
-        print(f"Deep Sleep: {sleep.deep_sleep_hours:.1f} hours ({sleep.deep_sleep_percentage:.1f}%)")
+        print(
+            f"Deep Sleep: {sleep.deep_sleep_hours:.1f} hours ({sleep.deep_sleep_percentage:.1f}%)"
+        )
         print(f"Light Sleep: {sleep.light_sleep_hours:.1f} hours")
-        print(f"REM Sleep: {sleep.rem_sleep_hours:.1f} hours ({sleep.rem_sleep_percentage:.1f}%)")
+        print(
+            f"REM Sleep: {sleep.rem_sleep_hours:.1f} hours ({sleep.rem_sleep_percentage:.1f}%)"
+        )
 
         if sleep.overall_score:
             print(f"\nSleep Score: {sleep.overall_score}")
@@ -244,12 +264,106 @@ def cmd_export(args: argparse.Namespace) -> int:
         include_daily=True,
     )
 
-    output_path = Path(args.output) if args.output else Path(f"garmin_export_{start_date}_{end_date}.json")
+    output_path = (
+        Path(args.output)
+        if args.output
+        else Path(f"garmin_export_{start_date}_{end_date}.json")
+    )
 
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2, default=str)
 
     print(f"Exported data to {output_path}")
+    return 0
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    """Handle update command - pull latest changes from git."""
+    package_root = _get_package_root()
+
+    if not package_root:
+        print("Could not find garmer package root directory.", file=sys.stderr)
+        print("Make sure garmer is installed from a git repository.", file=sys.stderr)
+        return 1
+
+    print(f"Updating garmer from {package_root}...")
+
+    try:
+        # Fetch first to see what's available
+        subprocess.run(
+            ["git", "fetch"],
+            cwd=package_root,
+            check=True,
+            capture_output=True,
+        )
+
+        # Check if there are updates
+        result = subprocess.run(
+            ["git", "status", "-uno"],
+            cwd=package_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        if "Your branch is up to date" in result.stdout:
+            print("Already up to date.")
+            return 0
+
+        # Show what will change
+        log_result = subprocess.run(
+            ["git", "log", "--oneline", "HEAD..@{u}"],
+            cwd=package_root,
+            capture_output=True,
+            text=True,
+        )
+        if log_result.stdout.strip():
+            print("\nIncoming changes:")
+            print(log_result.stdout)
+
+        # Pull the changes
+        pull_result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            cwd=package_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        print(pull_result.stdout)
+        print(
+            "Update complete! Changes will take effect immediately (editable install)."
+        )
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        print(f"Git error: {e.stderr if e.stderr else e}", file=sys.stderr)
+        return 1
+    except FileNotFoundError:
+        print("Git is not installed or not in PATH.", file=sys.stderr)
+        return 1
+
+
+def cmd_version(args: argparse.Namespace) -> int:
+    """Handle version command."""
+    from garmer import __version__
+
+    print(f"garmer {__version__}")
+
+    package_root = _get_package_root()
+    if package_root:
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=package_root,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print(f"git: {result.stdout.strip()}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
     return 0
 
 
@@ -259,7 +373,9 @@ def create_parser() -> argparse.ArgumentParser:
         prog="garmer",
         description="Garmin data extraction tool for MoltBot integration",
     )
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -283,8 +399,12 @@ def create_parser() -> argparse.ArgumentParser:
     sleep_parser.add_argument("-d", "--date", help="Date (YYYY-MM-DD)")
 
     # Activities command
-    activities_parser = subparsers.add_parser("activities", help="List recent activities")
-    activities_parser.add_argument("-n", "--limit", type=int, default=10, help="Number of activities")
+    activities_parser = subparsers.add_parser(
+        "activities", help="List recent activities"
+    )
+    activities_parser.add_argument(
+        "-n", "--limit", type=int, default=10, help="Number of activities"
+    )
 
     # Snapshot command
     snapshot_parser = subparsers.add_parser("snapshot", help="Get health snapshot")
@@ -295,8 +415,16 @@ def create_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser("export", help="Export data to file")
     export_parser.add_argument("-s", "--start-date", help="Start date (YYYY-MM-DD)")
     export_parser.add_argument("-e", "--end-date", help="End date (YYYY-MM-DD)")
-    export_parser.add_argument("-n", "--days", type=int, default=7, help="Number of days (if no start date)")
+    export_parser.add_argument(
+        "-n", "--days", type=int, default=7, help="Number of days (if no start date)"
+    )
     export_parser.add_argument("-o", "--output", help="Output file path")
+
+    # Update command
+    subparsers.add_parser("update", help="Update garmer to latest version (git pull)")
+
+    # Version command
+    subparsers.add_parser("version", help="Show version information")
 
     return parser
 
@@ -321,6 +449,8 @@ def main() -> int:
         "activities": cmd_activities,
         "snapshot": cmd_snapshot,
         "export": cmd_export,
+        "update": cmd_update,
+        "version": cmd_version,
     }
 
     handler = commands.get(args.command)

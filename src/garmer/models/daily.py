@@ -19,7 +19,7 @@ class DailyStats(GarminBaseModel):
     total_distance_meters: float = 0.0
     active_calories: int = 0
     total_calories: int = 0
-    floors_ascended: int = 0
+    floors_ascended: float = 0.0
 
     # Heart rate
     resting_heart_rate: int | None = None
@@ -106,9 +106,9 @@ class DailySummary(GarminBaseModel):
         alias="bodyBatteryMostRecentValue", default=None
     )
 
-    # Floors
-    floors_ascended: int = Field(alias="floorsAscended", default=0)
-    floors_descended: int = Field(alias="floorsDescended", default=0)
+    # Floors (API returns floats for partial floors)
+    floors_ascended: float = Field(alias="floorsAscended", default=0.0)
+    floors_descended: float = Field(alias="floorsDescended", default=0.0)
     floors_ascended_goal: int = Field(alias="floorsAscendedGoal", default=10)
 
     # Intensity minutes
@@ -187,8 +187,8 @@ class DailySummary(GarminBaseModel):
             body_battery_highest_value=data.get("bodyBatteryHighestValue"),
             body_battery_lowest_value=data.get("bodyBatteryLowestValue"),
             body_battery_most_recent_value=data.get("bodyBatteryMostRecentValue"),
-            floors_ascended=get_int("floorsAscended", 0),
-            floors_descended=get_int("floorsDescended", 0),
+            floors_ascended=get_float("floorsAscended", 0.0) or 0.0,
+            floors_descended=get_float("floorsDescended", 0.0) or 0.0,
             floors_ascended_goal=get_int("floorsAscendedGoal", 10),
             moderate_intensity_minutes=get_int("moderateIntensityMinutes", 0),
             vigorous_intensity_minutes=get_int("vigorousIntensityMinutes", 0),

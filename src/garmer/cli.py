@@ -134,7 +134,7 @@ def cmd_summary(args: argparse.Namespace) -> int:
         print(
             f"Calories: {summary.total_kilocalories:,} (Active: {summary.active_kilocalories:,})"
         )
-        print(f"Floors: {summary.floors_ascended}")
+        print(f"Floors: {summary.floors_ascended:.0f}")
 
         if summary.resting_heart_rate:
             print(f"Resting HR: {summary.resting_heart_rate} bpm")

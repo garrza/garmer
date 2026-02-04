@@ -398,23 +398,318 @@ def cmd_activities(args: argparse.Namespace) -> int:
         print("Not logged in. Use 'garmer login' first.", file=sys.stderr)
         return 1
 
-    activities = client.get_recent_activities(limit=args.limit)
-    if activities:
-        print(f"\n=== Recent Activities ({len(activities)}) ===\n")
-        for activity in activities:
-            print(f"[{activity.activity_type_key}] {activity.activity_name}")
-            print(f"  Date: {activity.start_time}")
-            print(f"  Duration: {activity.duration_minutes:.1f} min")
-            if activity.distance_meters > 0:
-                print(f"  Distance: {activity.distance_km:.2f} km")
-            print(f"  Calories: {activity.calories:.0f}")
-            if activity.avg_heart_rate:
-                print(f"  Avg HR: {activity.avg_heart_rate} bpm")
-            print()
+    # Get activities - either for a specific date or recent
+    if args.date:
+        target_date = args.date
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        activities = client._activities.get_activities_for_date(target_date)
+        title = f"Activities for {target_date}"
     else:
-        print("No recent activities found.")
+        activities = client.get_recent_activities(limit=args.limit)
+        title = f"Recent Activities ({len(activities)})"
+
+    if not activities:
+        if args.json:
+            print(json.dumps({"activities": [], "count": 0}))
+        else:
+            print("No activities found.")
+        return 0
+
+    # JSON output
+    if args.json:
+        data = {
+            "count": len(activities),
+            "activities": [_activity_to_dict(a) for a in activities],
+        }
+        print(json.dumps(data, indent=2, default=str))
+        return 0
+
+    # Human-readable output
+    print(f"\n=== {title} ===\n")
+    for activity in activities:
+        _print_activity_brief(activity)
+        print()
 
     return 0
+
+
+def cmd_activity(args: argparse.Namespace) -> int:
+    """Handle single activity detail command."""
+    try:
+        client = GarminClient.from_saved_tokens()
+    except AuthenticationError:
+        print("Not logged in. Use 'garmer login' first.", file=sys.stderr)
+        return 1
+
+    # Get activity - by ID or latest
+    if args.id:
+        activity = client.get_activity(args.id)
+        if not activity:
+            print(f"Activity {args.id} not found.", file=sys.stderr)
+            return 1
+    else:
+        # Get latest activity
+        activities = client.get_recent_activities(limit=1)
+        if not activities:
+            print("No activities found.", file=sys.stderr)
+            return 1
+        activity = activities[0]
+
+    # Get additional details if requested
+    laps = []
+    hr_zones = None
+    if args.laps:
+        laps = client._activities.get_activity_laps(activity.activity_id)
+    if args.zones:
+        hr_zones = client._activities.get_activity_hr_zones(activity.activity_id)
+
+    # JSON output
+    if args.json:
+        data = _activity_to_dict(activity, detailed=True)
+        if laps:
+            data["laps"] = [_lap_to_dict(lap) for lap in laps]
+        if hr_zones:
+            data["hr_zones"] = hr_zones
+        print(json.dumps(data, indent=2, default=str))
+        return 0
+
+    # Human-readable output
+    _print_activity_detailed(activity, laps, hr_zones)
+    return 0
+
+
+def _activity_to_dict(activity, detailed: bool = False) -> dict:
+    """Convert activity to dictionary for JSON output."""
+    data = {
+        "id": activity.activity_id,
+        "name": activity.activity_name,
+        "type": activity.activity_type_key,
+        "date": str(activity.start_time),
+        "duration_minutes": round(activity.duration_minutes, 1),
+        "distance_km": (
+            round(activity.distance_km, 2) if activity.distance_meters > 0 else None
+        ),
+        "calories": int(activity.calories),
+        "heart_rate": {
+            "avg": activity.avg_heart_rate,
+            "max": activity.max_heart_rate,
+            "min": activity.min_heart_rate,
+        },
+    }
+
+    if detailed or activity.elevation_gain:
+        data["elevation"] = {
+            "gain": activity.elevation_gain,
+            "loss": activity.elevation_loss,
+            "min": activity.min_elevation,
+            "max": activity.max_elevation,
+        }
+
+    if activity.pace_per_km:
+        data["pace_min_per_km"] = round(activity.pace_per_km, 2)
+
+    if activity.aerobic_training_effect or activity.anaerobic_training_effect:
+        data["training_effect"] = {
+            "aerobic": activity.aerobic_training_effect,
+            "anaerobic": activity.anaerobic_training_effect,
+            "label": activity.training_effect_label,
+        }
+
+    if activity.avg_cadence:
+        data["cadence"] = {
+            "avg": activity.avg_cadence,
+            "max": activity.max_cadence,
+        }
+
+    if activity.avg_power:
+        data["power"] = {
+            "avg": activity.avg_power,
+            "max": activity.max_power,
+            "normalized": activity.normalized_power,
+        }
+
+    if activity.steps:
+        data["steps"] = activity.steps
+
+    # Swimming metrics
+    if activity.total_strokes:
+        data["swimming"] = {
+            "total_strokes": activity.total_strokes,
+            "avg_strokes": activity.avg_stroke_count,
+            "pool_length": activity.pool_length,
+            "avg_swolf": activity.avg_swolf,
+        }
+
+    return data
+
+
+def _lap_to_dict(lap) -> dict:
+    """Convert lap to dictionary."""
+    return {
+        "lap_number": lap.lap_number,
+        "duration_seconds": lap.duration_seconds,
+        "distance_meters": lap.distance_meters,
+        "calories": lap.calories,
+        "avg_hr": lap.avg_heart_rate,
+        "max_hr": lap.max_heart_rate,
+        "avg_speed": lap.avg_speed,
+        "elevation_gain": lap.elevation_gain,
+    }
+
+
+def _print_activity_brief(activity) -> None:
+    """Print brief activity summary."""
+    print(f"[{activity.activity_type_key}] {activity.activity_name}")
+    print(f"  Date: {activity.start_time}")
+    print(f"  Duration: {activity.duration_minutes:.1f} min")
+    if activity.distance_meters > 0:
+        print(f"  Distance: {activity.distance_km:.2f} km", end="")
+        if activity.pace_per_km:
+            pace_min = int(activity.pace_per_km)
+            pace_sec = int((activity.pace_per_km - pace_min) * 60)
+            print(f" ({pace_min}:{pace_sec:02d}/km)")
+        else:
+            print()
+    print(f"  Calories: {activity.calories:.0f}")
+    if activity.avg_heart_rate:
+        hr_str = f"  HR: {activity.avg_heart_rate} avg"
+        if activity.max_heart_rate:
+            hr_str += f", {activity.max_heart_rate} max"
+        print(hr_str)
+    if activity.aerobic_training_effect:
+        print(
+            f"  Training Effect: {activity.aerobic_training_effect:.1f} aerobic", end=""
+        )
+        if activity.anaerobic_training_effect:
+            print(f", {activity.anaerobic_training_effect:.1f} anaerobic")
+        else:
+            print()
+
+
+def _print_activity_detailed(activity, laps: list, hr_zones: dict | None) -> None:
+    """Print detailed activity information."""
+    print(f"\n=== {activity.activity_name} ===")
+    print(f"Type: {activity.activity_type_key}")
+    print(f"Date: {activity.start_time}")
+    print(f"ID: {activity.activity_id}")
+
+    print(f"\n--- Performance ---")
+    # Duration
+    duration_mins = activity.duration_minutes
+    if duration_mins >= 60:
+        hours = int(duration_mins // 60)
+        mins = int(duration_mins % 60)
+        print(f"Duration: {hours}h {mins}m")
+    else:
+        print(f"Duration: {duration_mins:.1f} min")
+
+    # Distance and pace
+    if activity.distance_meters > 0:
+        print(
+            f"Distance: {activity.distance_km:.2f} km ({activity.distance_miles:.2f} mi)"
+        )
+        if activity.pace_per_km:
+            pace_min = int(activity.pace_per_km)
+            pace_sec = int((activity.pace_per_km - pace_min) * 60)
+            print(f"Pace: {pace_min}:{pace_sec:02d}/km")
+
+    # Speed
+    if activity.avg_speed:
+        avg_speed_kmh = activity.avg_speed * 3.6  # m/s to km/h
+        print(f"Speed: {avg_speed_kmh:.1f} km/h avg", end="")
+        if activity.max_speed:
+            max_speed_kmh = activity.max_speed * 3.6
+            print(f", {max_speed_kmh:.1f} km/h max")
+        else:
+            print()
+
+    print(f"Calories: {activity.calories:.0f} ({activity.active_calories:.0f} active)")
+
+    # Heart rate
+    if activity.avg_heart_rate:
+        print(f"\n--- Heart Rate ---")
+        print(f"Average: {activity.avg_heart_rate} bpm")
+        if activity.max_heart_rate:
+            print(f"Max: {activity.max_heart_rate} bpm")
+        if activity.min_heart_rate:
+            print(f"Min: {activity.min_heart_rate} bpm")
+
+    # Elevation
+    if activity.elevation_gain:
+        print(f"\n--- Elevation ---")
+        print(f"Gain: {activity.elevation_gain:.0f} m")
+        if activity.elevation_loss:
+            print(f"Loss: {activity.elevation_loss:.0f} m")
+        if activity.min_elevation and activity.max_elevation:
+            print(
+                f"Range: {activity.min_elevation:.0f} - {activity.max_elevation:.0f} m"
+            )
+
+    # Training effect
+    if activity.aerobic_training_effect:
+        print(f"\n--- Training Effect ---")
+        print(f"Aerobic: {activity.aerobic_training_effect:.1f}")
+        if activity.anaerobic_training_effect:
+            print(f"Anaerobic: {activity.anaerobic_training_effect:.1f}")
+        if activity.training_effect_label:
+            print(f"Label: {activity.training_effect_label}")
+
+    # Cadence
+    if activity.avg_cadence:
+        print(f"\n--- Cadence ---")
+        print(f"Average: {activity.avg_cadence:.0f} spm")
+        if activity.max_cadence:
+            print(f"Max: {activity.max_cadence:.0f} spm")
+
+    # Power
+    if activity.avg_power:
+        print(f"\n--- Power ---")
+        print(f"Average: {activity.avg_power:.0f} W")
+        if activity.max_power:
+            print(f"Max: {activity.max_power:.0f} W")
+        if activity.normalized_power:
+            print(f"Normalized: {activity.normalized_power:.0f} W")
+
+    # Steps
+    if activity.steps:
+        print(f"\nSteps: {activity.steps:,}")
+
+    # Swimming
+    if activity.total_strokes:
+        print(f"\n--- Swimming ---")
+        print(f"Total Strokes: {activity.total_strokes}")
+        if activity.avg_stroke_count:
+            print(f"Avg Strokes/Length: {activity.avg_stroke_count:.1f}")
+        if activity.avg_swolf:
+            print(f"Avg SWOLF: {activity.avg_swolf:.0f}")
+        if activity.pool_length:
+            print(f"Pool Length: {activity.pool_length:.0f} m")
+
+    # HR Zones
+    if hr_zones:
+        print(f"\n--- HR Zones ---")
+        if isinstance(hr_zones, list):
+            for zone in hr_zones:
+                zone_num = zone.get("zoneNumber", "?")
+                seconds = zone.get("secsInZone", 0)
+                mins = seconds // 60
+                print(f"Zone {zone_num}: {mins} min")
+
+    # Laps
+    if laps:
+        print(f"\n--- Laps ({len(laps)}) ---")
+        for lap in laps:
+            lap_dist = lap.distance_meters / 1000 if lap.distance_meters else 0
+            lap_dur = lap.duration_seconds / 60 if lap.duration_seconds else 0
+            print(
+                f"Lap {lap.lap_number + 1}: {lap_dist:.2f} km in {lap_dur:.1f} min",
+                end="",
+            )
+            if lap.avg_heart_rate:
+                print(f" @ {lap.avg_heart_rate} bpm")
+            else:
+                print()
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
@@ -636,13 +931,30 @@ def create_parser() -> argparse.ArgumentParser:
         "-d", "--date", help="Date (YYYY-MM-DD), defaults to yesterday"
     )
 
-    # Activities command
+    # Activities command (list)
     activities_parser = subparsers.add_parser(
         "activities", help="List recent activities"
     )
     activities_parser.add_argument(
         "-n", "--limit", type=int, default=10, help="Number of activities"
     )
+    activities_parser.add_argument(
+        "-d", "--date", help="Get activities for specific date (YYYY-MM-DD)"
+    )
+    activities_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # Activity command (single activity detail)
+    activity_parser = subparsers.add_parser(
+        "activity", help="Show detailed activity info"
+    )
+    activity_parser.add_argument(
+        "id", type=int, nargs="?", help="Activity ID (omit for latest)"
+    )
+    activity_parser.add_argument("--laps", action="store_true", help="Include lap data")
+    activity_parser.add_argument(
+        "--zones", action="store_true", help="Include HR zone data"
+    )
+    activity_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # Snapshot command
     snapshot_parser = subparsers.add_parser("snapshot", help="Get health snapshot")
@@ -687,6 +999,7 @@ def main() -> int:
         "summary": cmd_summary,
         "sleep": cmd_sleep,
         "activities": cmd_activities,
+        "activity": cmd_activity,
         "snapshot": cmd_snapshot,
         "export": cmd_export,
         "update": cmd_update,

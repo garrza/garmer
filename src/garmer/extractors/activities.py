@@ -1,7 +1,7 @@
 """Activity data extractor for Garmin Connect."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from garmer.auth import GarminAuth
@@ -235,7 +235,7 @@ class ActivityExtractor(BaseExtractor[Activity]):
         """
         if week_start is None:
             today = date.today()
-            week_start = today - datetime.timedelta(days=today.weekday())
+            week_start = today - timedelta(days=today.weekday())
 
         start_str = self._format_date(week_start)
         end_date = (
@@ -245,7 +245,7 @@ class ActivityExtractor(BaseExtractor[Activity]):
         )
         if isinstance(end_date, datetime):
             end_date = end_date.date()
-        end = end_date + datetime.timedelta(days=6)
+        end = end_date + timedelta(days=6)
 
         activities = self.get_activities(start_date=week_start, end_date=end, limit=100)
 

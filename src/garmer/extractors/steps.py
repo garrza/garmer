@@ -1,7 +1,7 @@
 """Steps data extractor for Garmin Connect."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from garmer.auth import GarminAuth
 from garmer.extractors.base import BaseExtractor
@@ -133,7 +133,7 @@ class StepsExtractor(BaseExtractor[StepsData]):
             Dictionary with weekly step statistics
         """
         end_date = date.today()
-        start_date = end_date - datetime.timedelta(days=6)
+        start_date = end_date - timedelta(days=6)
         return self.get_steps_stats(start_date, end_date)
 
     def get_floors_for_date(

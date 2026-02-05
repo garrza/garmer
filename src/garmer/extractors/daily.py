@@ -1,7 +1,7 @@
 """Daily summary data extractor for Garmin Connect."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from garmer.auth import GarminAuth
 from garmer.extractors.base import BaseExtractor
@@ -54,7 +54,7 @@ class DailyExtractor(BaseExtractor[DailySummary]):
         """
         if week_start is None:
             today = date.today()
-            week_start = today - datetime.timedelta(days=today.weekday())
+            week_start = today - timedelta(days=today.weekday())
 
         start = (
             self._parse_date(week_start)
@@ -63,7 +63,7 @@ class DailyExtractor(BaseExtractor[DailySummary]):
                 week_start.date() if isinstance(week_start, datetime) else week_start
             )
         )
-        end = start + datetime.timedelta(days=6)
+        end = start + timedelta(days=6)
 
         daily_data = self.get_for_date_range(start, end)
 
@@ -109,9 +109,9 @@ class DailyExtractor(BaseExtractor[DailySummary]):
         start = date(year, month, 1)
         # Get last day of month
         if month == 12:
-            end = date(year + 1, 1, 1) - datetime.timedelta(days=1)
+            end = date(year + 1, 1, 1) - timedelta(days=1)
         else:
-            end = date(year, month + 1, 1) - datetime.timedelta(days=1)
+            end = date(year, month + 1, 1) - timedelta(days=1)
 
         daily_data = self.get_for_date_range(start, end)
 

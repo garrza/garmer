@@ -1,7 +1,7 @@
 """Sleep data extractor for Garmin Connect."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from garmer.auth import GarminAuth
 from garmer.extractors.base import BaseExtractor
@@ -116,5 +116,5 @@ class SleepExtractor(BaseExtractor[SleepData]):
             Dictionary with weekly sleep statistics
         """
         end_date = date.today()
-        start_date = end_date - datetime.timedelta(days=6)
+        start_date = end_date - timedelta(days=6)
         return self.get_sleep_stats(start_date, end_date)

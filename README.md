@@ -1,12 +1,12 @@
 # Garmer - Garmin Data Extraction Tool
 
-A Python library for extracting health and fitness data from Garmin Connect, designed for integration with MoltBot and other health insight applications.
+A Python library for extracting health and fitness data from Garmin Connect, designed for integration with OpenClaw and other health insight applications.
 
 ## Features
 
 - **Comprehensive Data Extraction**: Access activities, sleep, heart rate, stress, steps, body composition, hydration, and more
 - **Easy Authentication**: OAuth-based authentication with token persistence
-- **MoltBot Integration Ready**: Designed for seamless integration with AI health assistants
+- **OpenClaw Integration Ready**: Designed for seamless integration with AI health assistants
 - **CLI Tool**: Command-line interface for quick data access
 - **Type-Safe Models**: Pydantic-based data models with full type hints
 - **Flexible Export**: Export data in JSON format for analysis
@@ -130,12 +130,12 @@ report = client.get_weekly_health_report()
 - Breathing rate (waking and sleeping)
 - Respiratory trends
 
-## MoltBot Integration
+## OpenClaw Integration
 
-Garmer is designed to work seamlessly with MoltBot for health insights:
+Garmer is designed to work seamlessly with OpenClaw for health insights:
 
 ```python
-from garmer.examples.moltbot_integration import GarminIntegration
+from garmer.examples.openclaw_integration import GarminIntegration
 
 integration = GarminIntegration()
 
